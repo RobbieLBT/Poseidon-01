@@ -1,0 +1,43 @@
+scenario:
+  name: ssv_dash
+
+vehicles:
+  ssv_1:
+    initial_state:
+      pose:
+        frame: local_ned
+        value: [0, 0, 0]
+      velocity:
+        frame: local_ned
+        value: [20.0, 0.0, 0.0]
+
+    route:
+      - id: wp0
+        trigger: { type: immediate }
+        position: { frame: local_ned, value: [0, 0, 0] }
+        mode: continue
+        params: { leg_speed_mps: 20.0 }
+
+      - id: deploy
+        trigger: { type: after_waypoint, waypoint_id: wp0 }
+        position: { frame: local_ned, value: [1000, 250, 0] }
+        mode: loiter
+        params: { loiter_seconds: 5 }
+
+      - id: dash_run
+        trigger: { type: after_waypoint, waypoint_id: deploy }
+        geometry:
+          type: polyline
+          frame: local_ned
+          points:
+            - [750, 500, 0]
+            - [1250, 1000, 0]
+            - [750, 1500, 0]
+            - [1000, 1750, 0]
+            - [1000, 2000, 0]
+        mode: continue
+        params:
+          leg_speed_mps: 20.0
+        on_complete:
+          - type: emit_event
+            name: dash_complete

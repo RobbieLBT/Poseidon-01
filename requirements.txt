@@ -1,0 +1,7 @@
+numpy
+matplotlib
+pyyaml
+streamlit
+pandas
+plotly
+rasterio

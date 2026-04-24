@@ -1,0 +1,130 @@
+scenario:
+  name: deep_scan
+
+vehicles:
+  ssv_1:
+    initial_state:
+      pose:
+        frame: local_ned
+        value: [0, 0, 0]
+      velocity:
+        frame: local_ned
+        value: [0.0, 0.0, 0.0]
+
+    route:
+      - id: wp0
+        trigger: { type: immediate }
+        position: { frame: local_ned, value: [0, 0, 0] }
+        mode: continue
+        params: { leg_speed_mps: 20.0 }
+
+      - id: wp1
+        trigger: { type: after_waypoint, waypoint_id: wp0 }
+        position: { frame: local_ned, value: [500, 500, 0] }
+        mode: continue
+        params: { leg_speed_mps: 20.0 }
+        on_complete:
+          - type: emit_event
+            name: ssv_wp1_reached
+
+      - id: standby_transit
+        trigger: { type: after_waypoint, waypoint_id: wp1 }
+        position: { frame: local_ned, value: [0, 1000, 0] }
+        mode: continue
+        params: { leg_speed_mps: 20.0 }
+
+      - id: standby
+        trigger: { type: after_waypoint, waypoint_id: standby_transit }
+        position: { frame: local_ned, value: [0, 1000, 0] }
+        mode: loiter
+        params: { loiter_until_event: auv_1_survey_complete }
+
+      - id: ssv_1_rendezvous
+        trigger: { type: event, event_id: auv_1_recovery_ready }
+        position: { frame: local_ned, value: [500, 2000, 0] }
+        mode: continue
+        params: { leg_speed_mps: 20.0 }
+        on_complete:
+          - type: emit_event
+            name: ssv_recovery_ready
+
+      - id: exfil
+        trigger: { type: event, event_id: auv_1_reattached }
+        position: { frame: local_ned, value: [0, 2500, 0] }
+        mode: continue
+        params: { leg_speed_mps: 20.0 }
+
+  auv_1:
+    initial_state:
+      attached_to:
+        vehicle: ssv_1
+        offset: [0.0, 0.0, 0.0]
+      velocity:
+        frame: local_ned
+        value: [0.0, 0.0, 0.0]
+
+    route:
+      - id: wp0
+        trigger: { type: event, event_id: ssv_wp1_reached }
+        on_trigger:
+          - type: detach
+        on_complete:
+          - type: emit_event
+            name: auv_1_detached
+        position: { frame: local_ned, value: [500, 500, -10] }
+        mode: continue
+        params: { leg_speed_mps: 5.0 }
+
+      - id: deploy
+        trigger: { type: after_waypoint, waypoint_id: wp0 }
+        position: { frame: local_ned, value: [1000, 250, -300] }
+        mode: loiter
+        params: { loiter_seconds: 5 }
+
+      - id: survey_run
+        trigger: { type: after_waypoint, waypoint_id: deploy }
+        geometry:
+          type: polyline
+          frame: local_ned
+          points:
+            - [2000, 500, -500]
+            - [2000, 2000, -500]
+            - [1750, 2000, -400]
+            - [1750, 500, -400]
+            - [1500, 500, -400]
+            - [1500, 2000, -500]
+        mode: continue
+        params:
+          leg_speed_mps: 3.0
+        on_complete:
+          - type: emit_event
+            name: auv_1_survey_complete
+
+      - id: auv_1_rendezvous
+        trigger: { type: after_waypoint, waypoint_id: survey_run }
+        geometry:
+          type: polyline
+          frame: local_ned
+          points:
+            - [1250, 1500, -500]
+            - [500, 1500, -500]
+            - [500, 2000, -2]
+        mode: continue
+        params:
+          leg_speed_mps: 5.0
+        on_complete:
+          - type: emit_event
+            name: auv_1_recovery_ready
+
+      - id: wp5
+        trigger: { type: after_waypoint, waypoint_id: auv_1_rendezvous }
+        position: { frame: local_ned, value: [500, 2000, -2] }
+        mode: loiter
+        params:
+          loiter_until_event: ssv_recovery_ready
+        on_complete:
+          - type: attach_to
+            vehicle: ssv_1
+            offset: [0.0, 0.0, 0.0]
+          - type: emit_event
+            name: auv_1_reattached

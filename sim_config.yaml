@@ -1,0 +1,216 @@
+global:
+  integration_dt_s: 0.1
+  control_dt_s: 0.5
+  log_dt_s: 1.0
+  waypoint_acceptance_default: estimated
+  playback_mode_default: dynamic
+vehicles:
+  ssv_1:
+    sim_profile: surface_basic
+    playback_mode: dynamic
+    waypoint_acceptance: truth
+  auv_1:
+    sim_profile: auv_basic
+    playback_mode: dynamic
+    waypoint_acceptance: estimated
+profiles:
+  auv_basic:
+    default_speed_mps: 1.0
+    vehicle_mode: underwater
+    controller: direct_pursuit
+    controller_uses_estimate: true
+    depth_channel_enabled: true
+    coeffs:
+      a_u: 0.18
+      b_T: 0.28
+      a_r: 0.8
+      b_du: 0.22
+      tau_delta: 0.7
+      delta_max_deg: 20.0
+      T_max: 7.0
+      a_w: 0.65
+      b_B: 0.9
+      b_theta: 0.35
+      a_theta: 0.9
+      b_elev_u: 0.12
+      tau_elev: 0.6
+      elev_max_deg: 20.0
+      wp_radius_xy_m: 8.0
+      wp_radius_z_m: 4.0
+      slowdown_radius_m: 15.0
+      wp_reacquire_radius_xy_m: 15
+      min_approach_speed_mps: 1.0
+
+      turn_slowdown_angle_deg: 60.0
+      min_turn_speed_fraction: 0.25
+    gains:
+      K_u: 0.9
+      K_psi: 1.6
+      K_r: 1.0
+      K_z: 0.1
+      K_theta: 1.3
+      K_q: 0.9
+      B_trim: 0.0
+    drift:
+      enabled: true
+      mode: random_walk
+      drift_fraction: 0.3
+      heading_bias_deg: 5.0
+      heading_rw_sigma_deg_sqrt_s: 0.2
+      pos_rw_sigma_m_sqrt_s: 1.25
+      depth_rw_sigma_m_sqrt_s: 0.25
+      seed: 7
+
+    sensors:
+      imu:
+        enabled: true
+        gyro_noise_std_deg_s:
+        - 0.08
+        - 0.08
+        - 0.1
+        accel_noise_std_mps2:
+        - 0.04
+        - 0.04
+        - 0.05
+        gyro_bias_init_deg_s:
+        - 0.02
+        - -0.01
+        - 0.08
+        accel_bias_init_mps2:
+        - 0.02
+        - -0.01
+        - 0.03
+        gyro_bias_rw_deg_sqrt_s:
+        - 0.003
+        - 0.003
+        - 0.005
+        accel_bias_rw_mps2_sqrt_s:
+        - 0.002
+        - 0.002
+        - 0.003
+      depth:
+        enabled: true
+        update_rate_hz: 4.0
+        sigma_m: 0.25
+        bias_m: 0.0
+        dropout_prob: 0.0
+      compass:
+        enabled: true
+        update_rate_hz: 4.0
+        sigma_deg: 1.5
+        bias_deg: 0.3
+        dropout_prob: 0.0
+      dvl:
+        enabled: false
+        mode: bottom_lock
+        update_rate_hz: 5.0
+        sigma_mps:
+        - 0.05
+        - 0.05
+        - 0.06
+        bias_mps:
+        - 0.0
+        - 0.0
+        - 0.0
+        dropout_prob: 0.01
+        min_altitude_m: 1.0
+        max_altitude_m: 5000.0
+        assume_lock_without_map: true
+      gps:
+        enabled: false
+        update_rate_hz: 1.0
+        sigma_h_m: 2.0
+        sigma_v_m: 3.0
+        surfaced_only: true
+        surface_depth_threshold_m: 0.75
+        dropout_prob: 0.0
+      bathymetry_cone:
+        enabled: false
+        geotiff_path: environment/maps/Pamlico_Sound.tiff
+        update_rate_hz: 0.5
+        num_beams_azimuth: 8
+        num_beams_radial: 3
+        half_angle_deg: 35.0
+        min_slant_range_m: 1.0
+        max_slant_range_m: 2000.0
+        range_sigma_m: 0.35
+        dropout_prob: 0.0
+        min_altitude_m: 0.5
+        max_altitude_m: 1800.0
+        debug_print: false
+
+    estimation:
+      enabled: true
+      bathymetry_localization_enabled: false
+      search_radius_m: 15.0
+      search_step_m: 5.0
+      blend_gain: 0.20
+      max_correction_step_m: 1.5
+      min_valid_beams: 8
+      min_texture_m: 0.1
+      max_texture_m: 8.0
+      min_gradient_norm: 0.01
+      max_score_threshold: 25.0
+      min_score_improvement: 0.0
+      imu_drift_attenuation_max: 0.20
+      confidence_smoothing: 0.85
+
+      dvl_blend_gain: 0.35
+      dvl_position_blend_gain: 0.15
+
+  surface_basic:
+    default_speed_mps: 5.0
+    vehicle_mode: surface
+    controller: direct_pursuit
+    controller_uses_estimate: true
+    depth_channel_enabled: false
+    coeffs:
+      a_u: 0.22
+      b_T: 0.24
+      a_r: 0.85
+      b_du: 0.32
+      tau_delta: 0.9
+      delta_max_deg: 16.0
+      T_max: 7.0
+      wp_radius_xy_m: 10.0
+      wp_radius_z_m: 4.0
+      slowdown_radius_m: 10.0
+      wp_reacquire_radius_xy_m: 15
+      wp_reacquire_radius_z_m: 8.0
+      min_approach_speed_mps: 1.0
+
+      turn_slowdown_angle_deg: 20.0
+      min_turn_speed_fraction: 0.0
+    gains:
+      K_u: 1.8
+      K_psi: 0.4
+      K_r: 0.25
+    drift:
+      enabled: false
+      mode: percent_step
+      drift_fraction: 0.1
+      heading_bias_deg: 2.0
+      heading_rw_sigma_deg_sqrt_s: 0.05
+      pos_rw_sigma_m_sqrt_s: 0.15
+      seed: 11
+
+environment_forcing:
+  mode: json_scenario
+  source: environment/weather/noaa_44014_2012.json
+  scenario: min
+  current_only: true
+  interpolation: linear
+  time_reference:
+    type: sim_elapsed
+    start_offset_s: 0.0
+logging:
+  enabled: true
+  output_dir: logs/simulator_run
+  sample_interval_s: 1.0
+  one_csv_per_vehicle: true
+visualization:
+  show_heading: true
+  heading_stride: 20
+  enable_2d: true
+  enable_3d: true
+

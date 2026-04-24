@@ -1,0 +1,231 @@
+{
+  "wind_column": "continuous_winds__WSPD",
+  "wind_dir_column": "continuous_winds__WDIR",
+  "current_column": "adcp_currents__SPD01",
+  "current_dir_column": "adcp_currents__DIR01",
+  "row_count": 5598,
+  "wind_mean_mps": 6.808985351911397,
+  "wind_std_mps": 3.9437948229197146,
+  "current_mean_mps": 0.26807531943510426,
+  "current_std_mps": 0.16601136623196125,
+  "scenarios": [
+    {
+      "label": "min",
+      "wind_speed_mps": 0.0,
+      "wind_dir_deg": 999.0,
+      "wind_xy_mps": [
+        0.0,
+        -0.0
+      ],
+      "current_speed_mps": 0.0,
+      "current_dir_deg": 259.0,
+      "current_xy_mps": [
+        -0.0,
+        -0.0
+      ],
+      "current_z_mps": 0.0
+    },
+    {
+      "label": "minus_2sd",
+      "wind_speed_mps": 0.0,
+      "wind_dir_deg": 999.0,
+      "wind_xy_mps": [
+        0.0,
+        -0.0
+      ],
+      "current_speed_mps": 0.10206395320314302,
+      "current_dir_deg": 122.0,
+      "current_xy_mps": [
+        0.086555141200124,
+        -0.05408565498614179
+      ],
+      "current_z_mps": 0.0
+    },
+    {
+      "label": "minus_1sd",
+      "wind_speed_mps": 2.865190528991682,
+      "wind_dir_deg": 999.0,
+      "wind_xy_mps": [
+        2.8299152790687003,
+        -0.44821454764114543
+      ],
+      "current_speed_mps": 0.10206395320314302,
+      "current_dir_deg": 122.0,
+      "current_xy_mps": [
+        0.086555141200124,
+        -0.05408565498614179
+      ],
+      "current_z_mps": 0.0
+    },
+    {
+      "label": "mean",
+      "wind_speed_mps": 6.808985351911397,
+      "wind_dir_deg": 61.0,
+      "wind_xy_mps": [
+        -5.955272774405182,
+        -3.301061602723036
+      ],
+      "current_speed_mps": 0.10206395320314302,
+      "current_dir_deg": 122.0,
+      "current_xy_mps": [
+        0.086555141200124,
+        -0.05408565498614179
+      ],
+      "current_z_mps": 0.0
+    },
+    {
+      "label": "plus_1sd",
+      "wind_speed_mps": 10.752780174831111,
+      "wind_dir_deg": 65.0,
+      "wind_xy_mps": [
+        -9.745328404742747,
+        -4.544321266366978
+      ],
+      "current_speed_mps": 0.10206395320314302,
+      "current_dir_deg": 122.0,
+      "current_xy_mps": [
+        0.086555141200124,
+        -0.05408565498614179
+      ],
+      "current_z_mps": 0.0
+    },
+    {
+      "label": "plus_2sd",
+      "wind_speed_mps": 14.696574997750826,
+      "wind_dir_deg": 999.0,
+      "wind_xy_mps": [
+        14.515635771960508,
+        -2.2990508476967597
+      ],
+      "current_speed_mps": 0.6000980518990268,
+      "current_dir_deg": 195.0,
+      "current_xy_mps": [
+        -0.15531680476038906,
+        -0.5796502066350276
+      ],
+      "current_z_mps": 0.0
+    }
+  ],
+  "env_blocks": {
+    "min": {
+      "environment": {
+        "surface_current_enabled": true,
+        "surface_current_xy": [
+          -0.0,
+          -0.0
+        ],
+        "underwater_current_enabled": true,
+        "underwater_current_xy": [
+          -0.0,
+          -0.0
+        ],
+        "underwater_current_z_enabled": false,
+        "underwater_current_z": 0.0,
+        "wind_xy_reference": [
+          0.0,
+          -0.0
+        ]
+      }
+    },
+    "minus_2sd": {
+      "environment": {
+        "surface_current_enabled": true,
+        "surface_current_xy": [
+          0.0866,
+          -0.0541
+        ],
+        "underwater_current_enabled": true,
+        "underwater_current_xy": [
+          0.0866,
+          -0.0541
+        ],
+        "underwater_current_z_enabled": false,
+        "underwater_current_z": 0.0,
+        "wind_xy_reference": [
+          0.0,
+          -0.0
+        ]
+      }
+    },
+    "minus_1sd": {
+      "environment": {
+        "surface_current_enabled": true,
+        "surface_current_xy": [
+          0.0866,
+          -0.0541
+        ],
+        "underwater_current_enabled": true,
+        "underwater_current_xy": [
+          0.0866,
+          -0.0541
+        ],
+        "underwater_current_z_enabled": false,
+        "underwater_current_z": 0.0,
+        "wind_xy_reference": [
+          2.8299,
+          -0.4482
+        ]
+      }
+    },
+    "mean": {
+      "environment": {
+        "surface_current_enabled": true,
+        "surface_current_xy": [
+          0.0866,
+          -0.0541
+        ],
+        "underwater_current_enabled": true,
+        "underwater_current_xy": [
+          0.0866,
+          -0.0541
+        ],
+        "underwater_current_z_enabled": false,
+        "underwater_current_z": 0.0,
+        "wind_xy_reference": [
+          -5.9553,
+          -3.3011
+        ]
+      }
+    },
+    "plus_1sd": {
+      "environment": {
+        "surface_current_enabled": true,
+        "surface_current_xy": [
+          0.0866,
+          -0.0541
+        ],
+        "underwater_current_enabled": true,
+        "underwater_current_xy": [
+          0.0866,
+          -0.0541
+        ],
+        "underwater_current_z_enabled": false,
+        "underwater_current_z": 0.0,
+        "wind_xy_reference": [
+          -9.7453,
+          -4.5443
+        ]
+      }
+    },
+    "plus_2sd": {
+      "environment": {
+        "surface_current_enabled": true,
+        "surface_current_xy": [
+          -0.1553,
+          -0.5797
+        ],
+        "underwater_current_enabled": true,
+        "underwater_current_xy": [
+          -0.1553,
+          -0.5797
+        ],
+        "underwater_current_z_enabled": false,
+        "underwater_current_z": 0.0,
+        "wind_xy_reference": [
+          14.5156,
+          -2.2991
+        ]
+      }
+    }
+  }
+}

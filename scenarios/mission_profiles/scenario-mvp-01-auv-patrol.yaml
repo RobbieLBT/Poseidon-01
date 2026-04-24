@@ -1,0 +1,41 @@
+scenario:
+  name: auv_patrol
+
+vehicles:
+  auv_1:
+    initial_state:
+      pose:
+        frame: local_ned
+        value: [0, 0, 0]
+      velocity:
+        frame: local_ned
+        value: [0.0, 0.0, 0.0]
+
+    route:
+      - id: wp0
+        trigger: { type: immediate }
+        position: { frame: local_ned, value: [0, 0, 0] }
+        mode: continue
+        params: { leg_speed_mps: 5.0 }
+
+      - id: deploy
+        trigger: { type: after_waypoint, waypoint_id: wp0 }
+        position: { frame: local_ned, value: [1000, 250, -30] }
+        mode: loiter
+        params: { loiter_seconds: 5 }
+
+      - id: survey_run
+        trigger: { type: after_waypoint, waypoint_id: deploy }
+        geometry:
+          type: polyline
+          frame: local_ned
+          points:
+            - [1000, 1250, -30]
+            - [750, 1250, -30]
+            - [750, 250, -30]
+        mode: continue
+        params:
+          leg_speed_mps: 2.0
+        on_complete:
+          - type: emit_event
+            name: patrol_complete
