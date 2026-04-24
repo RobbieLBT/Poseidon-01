@@ -13,11 +13,19 @@ import matplotlib
 matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 from matplotlib.animation import PillowWriter
+import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import streamlit as st
 import yaml
+
+try:
+    import rasterio
+except Exception:
+    rasterio = None
+
+from guidance_and_control.sensors.bathymetry_sensor_clean_slate import resolve_bathymetry_source
 
 import mission_analysis as ma
 
@@ -50,16 +58,14 @@ SCENARIO_TO_MAP = {
 # "Pamlico_Sound.png" = "https://.../Pamlico_Sound.tiff"
 APP_REPO_URL = os.environ.get(
     'POSEIDON_REPO_URL',
-    'https://github.com/RobbieLBT/Poseidon-01.git',
+    'https://github.com/RobbieLBT/Poseidon-01',
 )
+APP_REPO_BRANCH = os.environ.get('POSEIDON_REPO_BRANCH', 'main')
 
 GOOGLE_DRIVE_FOLDER_URL = 'https://drive.google.com/drive/folders/1NZlZ_c57iGzNFpUfOS-WwtCLmxFT3ZVm?usp=sharing'
 
 # Google Drive public share links for the GeoTIFF bathymetry files.
-# Assumption: links are listed in the same naming convention/order you provided.
-# If one map loads the wrong bathymetry, swap the corresponding URL here.
 DEFAULT_GEOTIFF_URLS: Dict[str, str] = {
-    # Order confirmed by user: Virginia_Beach, Pamlico_Sound, Hudson_Canyon, Hampton_Roads.
     'Virginia_Beach.png': 'https://drive.google.com/file/d/1pvhfk2CVuxVO5flvQXtyN19asv65rGXU/view?usp=drive_link',
     'Virginia_Beach': 'https://drive.google.com/file/d/1pvhfk2CVuxVO5flvQXtyN19asv65rGXU/view?usp=drive_link',
     'Pamlico_Sound.png': 'https://drive.google.com/file/d/1XgoarjrxTb6bF-JsjhYd0in7GbscrvvS/view?usp=drive_link',
@@ -70,17 +76,36 @@ DEFAULT_GEOTIFF_URLS: Dict[str, str] = {
     'Hampton_Roads': 'https://drive.google.com/file/d/1HgvB-9G5loq6yG6YfB-M2-cO8VUrBzYk/view?usp=drive_link',
 }
 
-DEFAULT_MAP_PNG_URLS: Dict[str, str] = {
-    # Order confirmed by user: Virginia_Beach, Pamlico_Sound, Hudson_Canyon, Hampton_Roads.
-    'Virginia_Beach.png': 'https://drive.google.com/file/d/1klH8LTD_mHPXnwRJsrzUCX3_gyu4FzDU/view?usp=drive_link',
-    'Virginia_Beach': 'https://drive.google.com/file/d/1klH8LTD_mHPXnwRJsrzUCX3_gyu4FzDU/view?usp=drive_link',
-    'Pamlico_Sound.png': 'https://drive.google.com/file/d/1a1UAUm6NzFefHsSYwjzSDyrIENAAUV3c/view?usp=drive_link',
-    'Pamlico_Sound': 'https://drive.google.com/file/d/1a1UAUm6NzFefHsSYwjzSDyrIENAAUV3c/view?usp=drive_link',
-    'Hudson_Canyon.png': 'https://drive.google.com/file/d/1HgmPpRodKZLSHS2ZHygEIYFsrph-Ikt5/view?usp=drive_link',
-    'Hudson_Canyon': 'https://drive.google.com/file/d/1HgmPpRodKZLSHS2ZHygEIYFsrph-Ikt5/view?usp=drive_link',
-    'Hampton_Roads.png': 'https://drive.google.com/file/d/1Whc-BL2KscG4tlckTEDrT_IhlEkyWg0R/view?usp=drive_link',
-    'Hampton_Roads': 'https://drive.google.com/file/d/1Whc-BL2KscG4tlckTEDrT_IhlEkyWg0R/view?usp=drive_link',
-}
+
+def github_repo_web_url(repo_url: str) -> str:
+    text = str(repo_url or '').strip()
+    if not text:
+        return ''
+    if text.endswith('.git'):
+        text = text[:-4]
+    return text.rstrip('/')
+
+
+def github_raw_base_url(repo_url: str, branch: str) -> str:
+    web_url = github_repo_web_url(repo_url)
+    prefix = 'https://github.com/'
+    if web_url.startswith(prefix):
+        return 'https://raw.githubusercontent.com/' + web_url[len(prefix):].strip('/') + f'/{branch.strip("/")}'
+    return web_url
+
+
+def build_default_map_png_urls() -> Dict[str, str]:
+    raw_base = github_raw_base_url(APP_REPO_URL, APP_REPO_BRANCH)
+    names = ['Virginia_Beach', 'Pamlico_Sound', 'Hudson_Canyon', 'Hampton_Roads']
+    out: Dict[str, str] = {}
+    for name in names:
+        url = f'{raw_base}/environment/maps/{name}.png'
+        out[name] = url
+        out[f'{name}.png'] = url
+    return out
+
+
+DEFAULT_MAP_PNG_URLS: Dict[str, str] = build_default_map_png_urls()
 
 st.set_page_config(page_title='Poseidon Mission Sandbox', layout='wide')
 
@@ -226,6 +251,74 @@ def default_geotiff_url_for_selection(scenario_path: Path, map_png_path: Optiona
             return value
 
     return ''
+
+
+@st.cache_data(show_spinner=False)
+def build_map_preview_image(path_or_url: str, max_dim_px: int = 900) -> Optional[np.ndarray]:
+    if not str(path_or_url or '').strip() or rasterio is None:
+        return None
+    try:
+        resolved = resolve_bathymetry_source(str(path_or_url), cache_dir='/tmp', timeout_s=120.0)
+        with rasterio.open(resolved) as src:
+            data = src.read(1, masked=True)
+    except Exception:
+        return None
+
+    arr = np.ma.filled(data.astype('float32'), np.nan)
+    finite = np.isfinite(arr)
+    if not finite.any():
+        return None
+
+    vals = arr[finite]
+    lo = float(np.nanpercentile(vals, 2.0))
+    hi = float(np.nanpercentile(vals, 98.0))
+    if not np.isfinite(lo) or not np.isfinite(hi) or hi <= lo:
+        lo = float(np.nanmin(vals))
+        hi = float(np.nanmax(vals))
+        if not np.isfinite(lo) or not np.isfinite(hi) or hi <= lo:
+            return None
+
+    scaled = np.clip((arr - lo) / (hi - lo), 0.0, 1.0)
+    scaled[~finite] = np.nan
+
+    # simple blue-to-tan bathymetry colormap for a clean preview
+    red = np.where(np.isfinite(scaled), 40 + 170 * scaled, 255)
+    green = np.where(np.isfinite(scaled), 70 + 140 * scaled, 255)
+    blue = np.where(np.isfinite(scaled), 110 + 90 * (1.0 - scaled), 255)
+    rgb = np.dstack([red, green, blue]).astype('uint8')
+
+    h, w = rgb.shape[:2]
+    max_dim = max(h, w)
+    if max_dim > max_dim_px and max_dim > 0:
+        step = int(np.ceil(max_dim / max_dim_px))
+        rgb = rgb[::step, ::step, :]
+    return rgb
+
+
+def map_display_source(
+    scenario_path: Path,
+    map_png_path: Optional[Path],
+    map_label: str,
+    remote_geotiff_url: str,
+) -> Tuple[str, str, Optional[np.ndarray]]:
+    local_geotiff = guess_geotiff_for_map(map_png_path)
+    if local_geotiff is not None and local_geotiff.exists():
+        preview = build_map_preview_image(str(local_geotiff))
+        if preview is not None:
+            return 'repo_geotiff', local_geotiff.name, preview
+
+    remote_clean = str(remote_geotiff_url or '').strip()
+    if remote_clean:
+        preview = build_map_preview_image(remote_clean)
+        if preview is not None:
+            base = default_map_name_for_scenario(scenario_path) or map_label or 'Bathymetry map'
+            return 'remote_geotiff', base, preview
+
+    remote_png_url = remote_png_url_for_map(map_png_path, map_label)
+    if remote_png_url:
+        return 'remote_png', map_label or 'Remote map', None
+
+    return 'none', map_label or 'Map preview unavailable', None
 
 
 def detect_weather_source() -> Optional[Path]:
@@ -980,14 +1073,18 @@ def main() -> None:
             language='text',
         )
         selected_map_name = selected_map_path.name if selected_map_path is not None else default_map_name_for_scenario(scenario_path)
-        if selected_map_path is not None and selected_map_path.exists():
-            st.image(str(selected_map_path), caption=selected_map_path.name, use_container_width=True)
+        source_kind, source_label, preview_image = map_display_source(
+            scenario_path=scenario_path,
+            map_png_path=selected_map_path,
+            map_label=selected_map_name or map_label,
+            remote_geotiff_url=remote_geotiff_url,
+        )
+        if preview_image is not None:
+            st.image(preview_image, caption=source_label, use_container_width=True)
+        elif source_kind == 'remote_png':
+            st.image(remote_png_url_for_map(selected_map_path, selected_map_name or map_label), caption=source_label, use_container_width=True)
         else:
-            remote_png_url = remote_png_url_for_map(selected_map_path, selected_map_name or map_label)
-            if remote_png_url:
-                st.image(remote_png_url, caption=selected_map_name or 'Remote map PNG', use_container_width=True)
-            else:
-                st.error('Map PNG failed to resolve for this scenario. Check the remote PNG mapping.')
+            st.error('Map preview failed to resolve for this scenario. Verify the local or remote GeoTIFF path.')
         st.caption("Bathymetry Data: NOAA DEM Global Mosaic")
         st.caption("Weather Data: NOAA NDBC Station 44014")
 
