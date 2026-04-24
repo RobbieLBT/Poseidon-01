@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import math
+import os
 import time
 from dataclasses import dataclass
 from datetime import datetime
@@ -41,6 +42,44 @@ SCENARIO_TO_MAP = {
     'scenario-mvp-04-deep-scan.yaml': 'Hudson_Canyon.png',
     'scenario-mvp-05-ssv-dash.yaml': 'Hampton_Roads.png',
     'scenario-mvp-06-ssv-short-dash.yaml': 'Hampton_Roads.png',
+}
+
+# Optional Streamlit Cloud fallbacks. Leave empty in Git, fill with public/raw
+# GeoTIFF URLs, or provide the same mapping through Streamlit secrets:
+# [bathymetry_urls]
+# "Pamlico_Sound.png" = "https://.../Pamlico_Sound.tiff"
+APP_REPO_URL = os.environ.get(
+    'POSEIDON_REPO_URL',
+    'https://github.com/RobbieLBT/Poseidon-01.git',
+)
+
+GOOGLE_DRIVE_FOLDER_URL = 'https://drive.google.com/drive/folders/1NZlZ_c57iGzNFpUfOS-WwtCLmxFT3ZVm?usp=sharing'
+
+# Google Drive public share links for the GeoTIFF bathymetry files.
+# Assumption: links are listed in the same naming convention/order you provided.
+# If one map loads the wrong bathymetry, swap the corresponding URL here.
+DEFAULT_GEOTIFF_URLS: Dict[str, str] = {
+    # Order confirmed by user: Virginia_Beach, Pamlico_Sound, Hudson_Canyon, Hampton_Roads.
+    'Virginia_Beach.png': 'https://drive.google.com/file/d/1pvhfk2CVuxVO5flvQXtyN19asv65rGXU/view?usp=drive_link',
+    'Virginia_Beach': 'https://drive.google.com/file/d/1pvhfk2CVuxVO5flvQXtyN19asv65rGXU/view?usp=drive_link',
+    'Pamlico_Sound.png': 'https://drive.google.com/file/d/1XgoarjrxTb6bF-JsjhYd0in7GbscrvvS/view?usp=drive_link',
+    'Pamlico_Sound': 'https://drive.google.com/file/d/1XgoarjrxTb6bF-JsjhYd0in7GbscrvvS/view?usp=drive_link',
+    'Hudson_Canyon.png': 'https://drive.google.com/file/d/1sbm5qWBZf2iHpYHBbwBGymMUhHzlYoQ1/view?usp=drive_link',
+    'Hudson_Canyon': 'https://drive.google.com/file/d/1sbm5qWBZf2iHpYHBbwBGymMUhHzlYoQ1/view?usp=drive_link',
+    'Hampton_Roads.png': 'https://drive.google.com/file/d/1HgvB-9G5loq6yG6YfB-M2-cO8VUrBzYk/view?usp=drive_link',
+    'Hampton_Roads': 'https://drive.google.com/file/d/1HgvB-9G5loq6yG6YfB-M2-cO8VUrBzYk/view?usp=drive_link',
+}
+
+DEFAULT_MAP_PNG_URLS: Dict[str, str] = {
+    # Order confirmed by user: Virginia_Beach, Pamlico_Sound, Hudson_Canyon, Hampton_Roads.
+    'Virginia_Beach.png': 'https://drive.google.com/file/d/1klH8LTD_mHPXnwRJsrzUCX3_gyu4FzDU/view?usp=drive_link',
+    'Virginia_Beach': 'https://drive.google.com/file/d/1klH8LTD_mHPXnwRJsrzUCX3_gyu4FzDU/view?usp=drive_link',
+    'Pamlico_Sound.png': 'https://drive.google.com/file/d/1a1UAUm6NzFefHsSYwjzSDyrIENAAUV3c/view?usp=drive_link',
+    'Pamlico_Sound': 'https://drive.google.com/file/d/1a1UAUm6NzFefHsSYwjzSDyrIENAAUV3c/view?usp=drive_link',
+    'Hudson_Canyon.png': 'https://drive.google.com/file/d/1HgmPpRodKZLSHS2ZHygEIYFsrph-Ikt5/view?usp=drive_link',
+    'Hudson_Canyon': 'https://drive.google.com/file/d/1HgmPpRodKZLSHS2ZHygEIYFsrph-Ikt5/view?usp=drive_link',
+    'Hampton_Roads.png': 'https://drive.google.com/file/d/1Whc-BL2KscG4tlckTEDrT_IhlEkyWg0R/view?usp=drive_link',
+    'Hampton_Roads': 'https://drive.google.com/file/d/1Whc-BL2KscG4tlckTEDrT_IhlEkyWg0R/view?usp=drive_link',
 }
 
 st.set_page_config(page_title='Poseidon Mission Sandbox', layout='wide')
@@ -105,6 +144,29 @@ def default_map_for_scenario(scenario_path: Path) -> Optional[Path]:
     return candidate if candidate.exists() else None
 
 
+
+def google_drive_direct_download_url(url: str) -> str:
+    if 'drive.google.com' not in str(url):
+        return str(url)
+    text = str(url)
+    marker = '/file/d/'
+    if marker in text:
+        file_id = text.split(marker, 1)[1].split('/', 1)[0]
+        return f'https://drive.google.com/uc?export=download&id={file_id}'
+    return text
+
+
+def remote_png_url_for_map(map_png_path: Optional[Path]) -> Optional[str]:
+    if map_png_path is None:
+        return None
+    candidates = [map_png_path.name, map_png_path.stem]
+    for key in candidates:
+        url = DEFAULT_MAP_PNG_URLS.get(key)
+        if url:
+            return google_drive_direct_download_url(url)
+    return None
+
+
 def guess_geotiff_for_map(map_png_path: Optional[Path]) -> Optional[Path]:
     if map_png_path is None:
         return None
@@ -113,6 +175,48 @@ def guess_geotiff_for_map(map_png_path: Optional[Path]) -> Optional[Path]:
         if candidate.exists():
             return candidate
     return None
+
+
+def _lookup_nested_mapping(mapping: Any, keys: Sequence[str]) -> str:
+    if not isinstance(mapping, Mapping):
+        return ''
+    for key in keys:
+        value = mapping.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ''
+
+
+def default_geotiff_url_for_selection(scenario_path: Path, map_png_path: Optional[Path], map_label: str = '') -> str:
+    keys: List[str] = []
+    if map_png_path is not None:
+        keys.extend([map_png_path.name, map_png_path.stem])
+    if map_label:
+        keys.append(map_label)
+    keys.append(scenario_path.name)
+
+    url = _lookup_nested_mapping(DEFAULT_GEOTIFF_URLS, keys)
+    if url:
+        return url
+
+    try:
+        url = _lookup_nested_mapping(st.secrets.get('bathymetry_urls', {}), keys)
+        if url:
+            return url
+    except Exception:
+        pass
+
+    env_keys = []
+    if map_png_path is not None:
+        normalized_stem = ''.join(ch if ch.isalnum() else '_' for ch in map_png_path.stem).upper()
+        env_keys.append(f'POSEIDON_BATHY_URL_{normalized_stem}')
+    env_keys.append('POSEIDON_BATHY_URL')
+    for env_key in env_keys:
+        value = os.environ.get(env_key, '').strip()
+        if value:
+            return value
+
+    return ''
 
 
 def detect_weather_source() -> Optional[Path]:
@@ -174,6 +278,7 @@ def build_runtime_sim_config(
     bathy_sensor_enabled: bool,
     bathy_blend_gain: Optional[float],
     map_png_path: Optional[Path],
+    remote_geotiff_url: str,
     run_dir: Path,
 ) -> Tuple[Dict[str, Any], List[str]]:
     cfg = copy.deepcopy(dict(base_cfg))
@@ -220,11 +325,16 @@ def build_runtime_sim_config(
             if bathy_blend_gain is not None:
                 est_cfg['blend_gain'] = float(bathy_blend_gain)
 
+            remote_geotiff_url_clean = str(remote_geotiff_url or '').strip()
             geotiff_path = guess_geotiff_for_map(map_png_path)
-            if geotiff_path is not None:
+            if remote_geotiff_url_clean:
+                bathy_cfg['geotiff_path'] = remote_geotiff_url_clean
+                bathy_cfg['cache_dir'] = '/tmp'
+                bathy_cfg['timeout_s'] = 120.0
+            elif geotiff_path is not None:
                 bathy_cfg['geotiff_path'] = relative_to_repo(geotiff_path)
             elif bathy_sensor_enabled:
-                notes.append('Bathymetry sensor enabled, but no matching GeoTIFF was found beside the selected PNG.')
+                notes.append('Bathymetry sensor enabled, but no local GeoTIFF was found beside the selected PNG and no remote GeoTIFF URL was provided.')
 
     for vehicle_cfg in vehicles.values():
         if not isinstance(vehicle_cfg, dict):
@@ -673,6 +783,7 @@ def run_simulation(
     bathy_sensor_enabled: bool,
     bathy_blend_gain: Optional[float],
     map_png_path: Optional[Path],
+    remote_geotiff_url: str,
     playback_speed: float,
     max_time_s: float,
     output_gif_2d: bool,
@@ -692,6 +803,7 @@ def run_simulation(
         bathy_sensor_enabled=bathy_sensor_enabled,
         bathy_blend_gain=bathy_blend_gain,
         map_png_path=map_png_path,
+        remote_geotiff_url=remote_geotiff_url,
         run_dir=run_dir,
     )
     sim_cfg_path = run_dir / 'sim_config.runtime.yaml'
@@ -731,6 +843,7 @@ def run_simulation(
         f'IMU drift enabled: {imu_drift_enabled}',
         f'DVL sensor enabled: {dvl_sensor_enabled}',
         f'Bathymetry sensor enabled: {bathy_sensor_enabled}',
+        *(([f'Remote GeoTIFF URL configured: {remote_geotiff_url}'] if str(remote_geotiff_url or '').strip() else [])),
         f'Wall-clock compute duration: {wall_clock_s:.3f} s',
         *(([f'Estimated compute energy: {compute_energy_wh_est:.6f} Wh'] if compute_energy_wh_est is not None else [])),
         *notes,
@@ -760,6 +873,16 @@ def ensure_state() -> None:
 def main() -> None:
     ensure_state()
     st.title('Poseidon Mission Sandbox')
+
+    st.markdown(
+    """
+    ### A maritime modeling simulation environment for software-defined autonomous systems.
+
+    [GitHub repository](%s)
+
+    This tool blends vehicle physics, guidance and control strategies, sensor suites, and real-world geographic and weather data to perform comprehensive mission analysis on autonomous maritime concepts.
+        """ % APP_REPO_URL
+    )
 
     if not SIM_CONFIG_PATH.exists():
         st.error(f'Missing sim config: {SIM_CONFIG_PATH}')
@@ -791,6 +914,7 @@ def main() -> None:
         default_map_path = default_map_for_scenario(scenario_path)
         map_labels = list(maps.keys())
         selected_map_path = default_map_path
+        map_label = ''
         if map_labels:
             selected_index = 0
             if default_map_path is not None:
@@ -801,14 +925,23 @@ def main() -> None:
             map_label = st.selectbox('Map PNG', map_labels, index=selected_index)
             selected_map_path = maps[map_label]
 
-        weather_mode = st.selectbox('Weather mode', WEATHER_MODES, index=0)
-        controller_label = st.selectbox('Control strategy', list(CONTROL_OPTIONS.keys()), index=1)
-        imu_drift_enabled = st.checkbox('AUV IMU drift', value=True)
+        default_remote_geotiff_url = default_geotiff_url_for_selection(scenario_path, selected_map_path, map_label)
+        remote_geotiff_url = st.text_input(
+            'Remote GeoTIFF URL (optional)',
+            value=default_remote_geotiff_url,
+            help='Uses the Google Drive bathymetry preset for the selected map by default. Leave blank to force desktop/local repo TIFFs beside the selected PNG.',
+        ).strip()
+        if remote_geotiff_url:
+            st.caption('Bathymetry source: Google Drive / remote GeoTIFF fallback')
+
+        weather_mode = st.selectbox('Weather Mode', WEATHER_MODES, index=0)
+        controller_label = st.selectbox('Control Strategy', list(CONTROL_OPTIONS.keys()), index=1)
+        imu_drift_enabled = st.checkbox('AUV IMU Drift', value=True)
         dvl_sensor_enabled = st.checkbox('AUV DVL', value=False)
-        bathy_sensor_enabled = st.checkbox('AUV bathymetry sensor', value=True)
-        bathy_blend_gain = st.slider('Bathy blend gain', min_value=0.0, max_value=1.0, value=0.20, step=0.01, help='Dominant bathymetry aggressiveness term. Higher values pull the estimate harder toward the bathy match.')
-        playback_speed = st.slider('Playback speed', min_value=0.25, max_value=50.0, value=5.0, step=0.25)
-        max_time_s = st.number_input('Max simulation time [s]', min_value=10.0, max_value=50000.0, value=DEFAULT_MAX_TIME_S, step=10.0)
+        bathy_sensor_enabled = st.checkbox('AUV Bathymetry Sensor', value=True)
+        bathy_blend_gain = st.slider('Bathy Blend Gain', min_value=0.0, max_value=1.0, value=0.20, step=0.01, help='Dominant bathymetry aggressiveness term. Higher values pull the estimate harder toward the bathy match.')
+        playback_speed = st.slider('Playback Speed', min_value=0.25, max_value=50.0, value=5.0, step=0.25)
+        max_time_s = st.number_input('Max Simulation Time [s]', min_value=10.0, max_value=50000.0, value=DEFAULT_MAX_TIME_S, step=10.0)
         output_gif_2d = st.checkbox('Export 2D GIF', value=False)
         output_gif_3d = st.checkbox('Export 3D GIF', value=False)
         assumed_compute_power_w = st.number_input('Assumed compute power [W] for energy proxy', min_value=0.0, max_value=2000.0, value=0.0, step=5.0)
@@ -828,14 +961,20 @@ def main() -> None:
                 f'maps: {relative_to_repo(MAP_DIR)}',
                 f'weather: {relative_to_repo(WEATHER_DIR)}',
                 f'logs: {relative_to_repo(LOG_ROOT)}',
+                f'bathy drive folder: {GOOGLE_DRIVE_FOLDER_URL}',
             ]),
             language='text',
         )
         if selected_map_path is not None and selected_map_path.exists():
             st.image(str(selected_map_path), caption=selected_map_path.name, use_container_width=True)
         else:
-            st.info('No static PNG available for the selected scenario.')
-        st.caption("Bathymetry Data: NOAA DEM Global Mosaic | Weather Data: NOAA NDBC Station 44014")
+            remote_png_url = remote_png_url_for_map(selected_map_path)
+            if remote_png_url:
+                st.image(remote_png_url, caption=selected_map_path.name if selected_map_path is not None else 'Remote map PNG', use_container_width=True)
+            else:
+                st.info('No static PNG available for the selected scenario.')
+        st.caption("Bathymetry Data: NOAA DEM Global Mosaic")
+        st.caption("Weather Data: NOAA NDBC Station 44014")
 
 
     if run_clicked:
@@ -850,6 +989,7 @@ def main() -> None:
                 bathy_sensor_enabled=bathy_sensor_enabled,
                 bathy_blend_gain=float(bathy_blend_gain),
                 map_png_path=selected_map_path,
+                remote_geotiff_url=remote_geotiff_url,
                 playback_speed=playback_speed,
                 max_time_s=float(max_time_s),
                 output_gif_2d=output_gif_2d,

@@ -1,12 +1,90 @@
 from __future__ import annotations
 
+import hashlib
 import math
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 import rasterio
+import requests
+
+
+_GOOGLE_DRIVE_FILE_ID_RE = re.compile(r"(?:/file/d/|[?&]id=)([A-Za-z0-9_-]+)")
+
+
+def _extract_google_drive_file_id(url: str) -> Optional[str]:
+    match = _GOOGLE_DRIVE_FILE_ID_RE.search(str(url))
+    return match.group(1) if match else None
+
+
+def _filename_for_remote_url(url: str, cache_dir: Path) -> Path:
+    drive_id = _extract_google_drive_file_id(url)
+    if drive_id:
+        return cache_dir / f"google_drive_{drive_id}.tiff"
+    suffix = ".tiff"
+    lowered = url.lower().split("?", 1)[0]
+    for candidate in (".tif", ".tiff"):
+        if lowered.endswith(candidate):
+            suffix = candidate
+            break
+    digest = hashlib.sha256(url.encode("utf-8")).hexdigest()[:16]
+    return cache_dir / f"remote_bathymetry_{digest}{suffix}"
+
+
+def _download_remote_geotiff(url: str, *, cache_dir: str | Path = "/tmp", timeout_s: float = 120.0) -> Path:
+    """Download an HTTP/HTTPS GeoTIFF to a local cache and return the cached path.
+
+    Public Google Drive file links are supported without a Google API key. The file
+    or parent folder must still be shared as "Anyone with the link can view".
+    """
+    cache_path = Path(cache_dir).expanduser()
+    cache_path.mkdir(parents=True, exist_ok=True)
+    out_path = _filename_for_remote_url(url, cache_path)
+    if out_path.exists() and out_path.stat().st_size > 0:
+        return out_path
+
+    session = requests.Session()
+    drive_id = _extract_google_drive_file_id(url)
+    download_url = "https://drive.google.com/uc?export=download&id=" + drive_id if drive_id else url
+    response = session.get(download_url, stream=True, timeout=float(timeout_s))
+
+    # Large Google Drive files can return a confirmation interstitial. Follow the
+    # confirm token if present; otherwise write the response as-is.
+    content_type = response.headers.get("content-type", "").lower()
+    if drive_id and "text/html" in content_type:
+        html = response.text
+        token_match = re.search(r"confirm=([0-9A-Za-z_-]+)", html)
+        if token_match:
+            response = session.get(
+                "https://drive.google.com/uc?export=download"
+                f"&confirm={token_match.group(1)}&id={drive_id}",
+                stream=True,
+                timeout=float(timeout_s),
+            )
+        else:
+            raise RuntimeError(
+                "Google Drive returned an HTML page instead of a TIFF. "
+                "Confirm the file is shared as 'Anyone with the link can view'."
+            )
+
+    response.raise_for_status()
+    tmp_path = out_path.with_suffix(out_path.suffix + ".part")
+    with tmp_path.open("wb") as handle:
+        for chunk in response.iter_content(chunk_size=1024 * 1024):
+            if chunk:
+                handle.write(chunk)
+    tmp_path.replace(out_path)
+    return out_path
+
+
+def resolve_bathymetry_source(path_or_url: str | Path, *, cache_dir: str | Path = "/tmp", timeout_s: float = 120.0) -> Path:
+    raw = str(path_or_url).strip()
+    if raw.startswith(("http://", "https://")):
+        return _download_remote_geotiff(raw, cache_dir=cache_dir, timeout_s=timeout_s)
+    return Path(raw).expanduser()
 
 
 @dataclass
@@ -87,7 +165,7 @@ class BathymetryGrid:
 
     @classmethod
     def from_geotiff(cls, path: str | Path) -> 'BathymetryGrid':
-        path = Path(path)
+        path = resolve_bathymetry_source(path)
         with rasterio.open(path) as src:
             band = src.read(1).astype(float)
             nodata = src.nodata

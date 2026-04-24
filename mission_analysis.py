@@ -359,18 +359,28 @@ class ScenarioAnimator:
         for action in actions:
             self._apply_action(state, action)
 
+    def _resolve_bathy_grid_source(self, geotiff_path: str) -> str:
+        raw = str(geotiff_path).strip()
+        if raw.startswith(("http://", "https://")):
+            return raw
+        path = Path(raw).expanduser()
+        if path.is_absolute():
+            return str(path)
+        return str((REPO_ROOT / path).resolve())
+
     def _get_bathy_grid(self, geotiff_path: Optional[str]) -> Optional[BathymetryGrid]:
         if not geotiff_path:
             return None
-        key = str(geotiff_path)
+        source = self._resolve_bathy_grid_source(str(geotiff_path))
+        key = source
         if key in self.bathy_grid_cache:
             return self.bathy_grid_cache[key]
         try:
-            grid = BathymetryGrid.from_geotiff(geotiff_path)
+            grid = BathymetryGrid.from_geotiff(source)
             self.bathy_grid_cache[key] = grid
             return grid
         except Exception as exc:
-            print(f"[bathymetry] failed to load grid '{geotiff_path}': {exc}")
+            print(f"[bathymetry] failed to load grid '{source}': {exc}")
             return None
 
     def _apply_dvl_localization(self, state: VehicleState, dt: float) -> None:
