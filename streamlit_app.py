@@ -136,12 +136,16 @@ def discover_png_maps() -> Dict[str, Path]:
     return {p.stem.replace('_', ' '): p for p in sorted(MAP_DIR.glob('*.png'))}
 
 
+def default_map_name_for_scenario(scenario_path: Path) -> Optional[str]:
+    return SCENARIO_TO_MAP.get(scenario_path.name)
+
+
 def default_map_for_scenario(scenario_path: Path) -> Optional[Path]:
-    map_name = SCENARIO_TO_MAP.get(scenario_path.name)
+    map_name = default_map_name_for_scenario(scenario_path)
     if not map_name:
         return None
     candidate = MAP_DIR / map_name
-    return candidate if candidate.exists() else None
+    return candidate if candidate.exists() else candidate
 
 
 
@@ -156,10 +160,12 @@ def google_drive_direct_download_url(url: str) -> str:
     return text
 
 
-def remote_png_url_for_map(map_png_path: Optional[Path]) -> Optional[str]:
-    if map_png_path is None:
-        return None
-    candidates = [map_png_path.name, map_png_path.stem]
+def remote_png_url_for_map(map_png_path: Optional[Path] = None, map_name: str = '') -> Optional[str]:
+    candidates = []
+    if map_png_path is not None:
+        candidates.extend([map_png_path.name, map_png_path.stem])
+    if map_name:
+        candidates.extend([map_name, Path(map_name).stem])
     for key in candidates:
         url = DEFAULT_MAP_PNG_URLS.get(key)
         if url:
@@ -189,10 +195,13 @@ def _lookup_nested_mapping(mapping: Any, keys: Sequence[str]) -> str:
 
 def default_geotiff_url_for_selection(scenario_path: Path, map_png_path: Optional[Path], map_label: str = '') -> str:
     keys: List[str] = []
+    scenario_map_name = default_map_name_for_scenario(scenario_path)
     if map_png_path is not None:
         keys.extend([map_png_path.name, map_png_path.stem])
     if map_label:
         keys.append(map_label)
+    if scenario_map_name:
+        keys.extend([scenario_map_name, Path(scenario_map_name).stem])
     keys.append(scenario_path.name)
 
     url = _lookup_nested_mapping(DEFAULT_GEOTIFF_URLS, keys)
@@ -912,18 +921,23 @@ def main() -> None:
         scenario_path = scenarios[scenario_label]
 
         default_map_path = default_map_for_scenario(scenario_path)
-        map_labels = list(maps.keys())
+        default_map_name = default_map_name_for_scenario(scenario_path) or ''
+        map_options: Dict[str, Path] = dict(maps)
+        if default_map_name and default_map_name.replace('_', ' ') not in map_options:
+            map_options[default_map_name.replace('_', ' ')] = MAP_DIR / default_map_name
+        if not map_options and default_map_name:
+            map_options[default_map_name.replace('_', ' ')] = MAP_DIR / default_map_name
+
+        map_labels = list(map_options.keys())
         selected_map_path = default_map_path
-        map_label = ''
+        map_label = default_map_name.replace('_', ' ') if default_map_name else ''
         if map_labels:
             selected_index = 0
-            if default_map_path is not None:
-                for idx, label in enumerate(map_labels):
-                    if maps[label] == default_map_path:
-                        selected_index = idx
-                        break
+            default_display_label = default_map_name.replace('_', ' ') if default_map_name else ''
+            if default_display_label in map_labels:
+                selected_index = map_labels.index(default_display_label)
             map_label = st.selectbox('Map PNG', map_labels, index=selected_index)
-            selected_map_path = maps[map_label]
+            selected_map_path = map_options[map_label]
 
         default_remote_geotiff_url = default_geotiff_url_for_selection(scenario_path, selected_map_path, map_label)
         remote_geotiff_url = st.text_input(
@@ -965,14 +979,15 @@ def main() -> None:
             ]),
             language='text',
         )
+        selected_map_name = selected_map_path.name if selected_map_path is not None else default_map_name_for_scenario(scenario_path)
         if selected_map_path is not None and selected_map_path.exists():
             st.image(str(selected_map_path), caption=selected_map_path.name, use_container_width=True)
         else:
-            remote_png_url = remote_png_url_for_map(selected_map_path)
+            remote_png_url = remote_png_url_for_map(selected_map_path, selected_map_name or map_label)
             if remote_png_url:
-                st.image(remote_png_url, caption=selected_map_path.name if selected_map_path is not None else 'Remote map PNG', use_container_width=True)
+                st.image(remote_png_url, caption=selected_map_name or 'Remote map PNG', use_container_width=True)
             else:
-                st.info('No static PNG available for the selected scenario.')
+                st.error('Map PNG failed to resolve for this scenario. Check the remote PNG mapping.')
         st.caption("Bathymetry Data: NOAA DEM Global Mosaic")
         st.caption("Weather Data: NOAA NDBC Station 44014")
 
