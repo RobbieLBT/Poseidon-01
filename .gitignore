@@ -60,7 +60,6 @@ tmp/
 temp/
 
 # Generated imagery only
-*.png
 *.jpg
 *.jpeg
 *.webp
